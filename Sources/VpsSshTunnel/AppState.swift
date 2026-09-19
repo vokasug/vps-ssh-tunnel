@@ -64,8 +64,7 @@ final class AppState: ObservableObject {
                 guard let self else { return }
                 self.log.log(ok ? "OK: tunnel is working" : "FAIL: tunnel is down")
                 if ok {
-                    self.log.log("Автовосстановление включено, мониторинг запущен")
-                    self.updateMonitor()
+                    self.ensureMonitor()
                 } else {
                     self.log.log("Туннель не работает, мониторинг не запущен")
                 }
@@ -118,9 +117,8 @@ final class AppState: ObservableObject {
                 self.log.log("Команда запуска выполнена, проверка туннеля")
                 TunnelManager.check(localPort: s.localPort) { working, _ in
                     self.log.log(working ? "OK: tunnel is working" : "FAIL: tunnel is down")
-                    if working && self.autoRestart && self.monitorTimer == nil {
-                        self.log.log("Автовосстановление включено, мониторинг запущен")
-                        self.updateMonitor()
+                    if working {
+                        self.ensureMonitor()
                     }
                     self.actionBusy = false
                 }
@@ -222,6 +220,7 @@ final class AppState: ObservableObject {
             if ok {
                 self.log.log("Запуск Telegram")
                 TunnelManager.openTelegram()
+                self.ensureMonitor()
                 self.actionBusy = false
                 return
             }
@@ -231,6 +230,7 @@ final class AppState: ObservableObject {
                     self.log.log("Туннель запущен")
                     self.log.log("Запуск Telegram")
                     TunnelManager.openTelegram()
+                    self.ensureMonitor()
                 } else {
                     self.log.log("ОШИБКА: запуск туннеля не удался\(output.isEmpty ? "" : ": \(output)"), Telegram не запущен")
                 }
@@ -247,6 +247,7 @@ final class AppState: ObservableObject {
             if ok {
                 self.log.log("Запуск Chrome через socks5://127.0.0.1:\(s.localPort)")
                 TunnelManager.openChrome(localPort: s.localPort)
+                self.ensureMonitor()
                 self.actionBusy = false
                 return
             }
@@ -256,12 +257,19 @@ final class AppState: ObservableObject {
                     self.log.log("Туннель запущен")
                     self.log.log("Запуск Chrome через socks5://127.0.0.1:\(s.localPort)")
                     TunnelManager.openChrome(localPort: s.localPort)
+                    self.ensureMonitor()
                 } else {
                     self.log.log("ОШИБКА: запуск туннеля не удался\(output.isEmpty ? "" : ": \(output)"), Chrome не запущен")
                 }
                 self.actionBusy = false
             }
         }
+    }
+
+    private func ensureMonitor() {
+        guard autoRestart, monitorTimer == nil else { return }
+        log.log("Автовосстановление включено, мониторинг запущен")
+        updateMonitor()
     }
 
     private func stopMonitor() {
