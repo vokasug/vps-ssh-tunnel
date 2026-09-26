@@ -12,9 +12,12 @@ swift build -c release
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp ".build/release/$EXECUTABLE" "$APP_DIR/Contents/MacOS/$EXECUTABLE"
 
-if [ -f Resources/AppIcon.icns ]; then
-    cp Resources/AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
+if [ ! -f Resources/AppIcon.icns ]; then
+    echo "AppIcon.icns not found, generating..."
+    swift scripts/generate-icon.swift Resources
+    iconutil -c icns Resources/AppIcon.iconset -o Resources/AppIcon.icns
 fi
+cp Resources/AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 
 cat > "$APP_DIR/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
