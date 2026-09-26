@@ -334,9 +334,8 @@ final class AppState: ObservableObject {
     }
 
     private func failMonitor() {
-        log.log("Автовосстановление остановлено")
+        log.log("Автовосстановление: попытка не удалась, повтор через 10 с")
         monitorBusy = false
-        autoRestart = false
     }
 
     func shutdown() {
