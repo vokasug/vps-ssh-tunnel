@@ -100,7 +100,10 @@ enum TunnelManager {
     }
 
     static func openTelegram() {
-        runAsync("/usr/bin/open", ["/Applications/Telegram.app"]) { _, _ in }
+        let path = FileManager.default.fileExists(atPath: "/Applications/Telegram.app")
+            ? "/Applications/Telegram.app"
+            : "/Applications/Telegram Desktop.app"
+        runAsync("/usr/bin/open", [path]) { _, _ in }
     }
 
     static func openChrome(localPort: Int) {
