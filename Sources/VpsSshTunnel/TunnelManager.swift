@@ -16,8 +16,9 @@ enum TunnelManager {
         } catch {
             return (-1, error.localizedDescription)
         }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+        let output = String(data: data, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return (process.terminationStatus, output)
     }

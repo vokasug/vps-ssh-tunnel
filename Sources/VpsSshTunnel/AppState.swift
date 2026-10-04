@@ -21,6 +21,7 @@ final class AppState: ObservableObject {
     private var monitorTimer: Timer?
     private var monitorBusy = false
     private var actionBusy = false
+    private var monitorSuspendedByScreenSleep = false
 
     var settings: Settings {
         Settings(
@@ -77,6 +78,29 @@ final class AppState: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             self?.shutdown()
+        }
+
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.screensDidSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.monitorTimer != nil else { return }
+            self.monitorSuspendedByScreenSleep = true
+            self.log.log("Экран выключен, автовосстановление приостановлено")
+            self.stopMonitor()
+        }
+
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.screensDidWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.monitorSuspendedByScreenSleep else { return }
+            self.monitorSuspendedByScreenSleep = false
+            self.log.log("Экран включён, автовосстановление возобновлено")
+            self.ensureMonitor()
+            self.monitorTick()
         }
     }
 

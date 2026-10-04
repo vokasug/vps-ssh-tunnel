@@ -17,7 +17,7 @@ final class LogStore: ObservableObject {
             .appendingPathComponent(".config/vps-ssh-tunnel", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         fileURL = dir.appendingPathComponent("vps-ssh-tunnel.log")
-        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+        _ = try? Data().write(to: fileURL)
     }
 
     func log(_ message: String) {
@@ -25,7 +25,7 @@ final class LogStore: ObservableObject {
         if let data = (line + "\n").data(using: .utf8),
            let handle = try? FileHandle(forWritingTo: fileURL) {
             defer { try? handle.close() }
-            try? handle.seekToEnd()
+            _ = try? handle.seekToEnd()
             try? handle.write(contentsOf: data)
         }
         DispatchQueue.main.async {
