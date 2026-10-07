@@ -14,13 +14,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    @Published private(set) var actionBusy = false
+    @Published var tunnelUp: Bool?
+    @Published var otRunning = false
+    @Published private(set) var otBusy = false
+
     let log = LogStore()
     private let store = SettingsStore()
     private var loading = true
     private var lastSaved: Settings?
     private var monitorTimer: Timer?
     private var monitorBusy = false
-    private var actionBusy = false
     private var monitorSuspendedByScreenSleep = false
 
     var settings: Settings {
@@ -63,6 +67,7 @@ final class AppState: ObservableObject {
             log.log("Проверка туннеля при запуске")
             TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
                 guard let self else { return }
+                self.tunnelUp = ok
                 self.log.log(ok ? "OK: tunnel is working" : "FAIL: tunnel is down")
                 if ok {
                     self.ensureMonitor()
@@ -71,6 +76,8 @@ final class AppState: ObservableObject {
                 }
             }
         }
+
+        refreshOtStatus()
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
@@ -127,6 +134,7 @@ final class AppState: ObservableObject {
         TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
             guard let self else { return }
             if ok {
+                self.tunnelUp = true
                 self.log.log("Туннель уже работает")
                 self.actionBusy = false
                 return
@@ -140,6 +148,7 @@ final class AppState: ObservableObject {
                 }
                 self.log.log("Команда запуска выполнена, проверка туннеля")
                 TunnelManager.check(localPort: s.localPort) { working, _ in
+                    self.tunnelUp = working
                     self.log.log(working ? "OK: tunnel is working" : "FAIL: tunnel is down")
                     if working {
                         self.ensureMonitor()
@@ -153,6 +162,7 @@ final class AppState: ObservableObject {
     func checkTapped() {
         log.log("Проверка туннеля")
         TunnelManager.check(localPort: settings.localPort) { [weak self] ok, _ in
+            self?.tunnelUp = ok
             self?.log.log(ok ? "OK: tunnel is working" : "FAIL: tunnel is down")
         }
     }
@@ -174,6 +184,7 @@ final class AppState: ObservableObject {
             }
             self.log.log("Остановка туннеля: pkill -f \"ssh -D \(port)\"")
             TunnelManager.stop(localPort: port) {
+                self.tunnelUp = false
                 self.log.log("Туннель остановлен")
                 self.stopMonitor()
                 self.actionBusy = false
@@ -320,9 +331,11 @@ final class AppState: ObservableObject {
         TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
             guard let self else { return }
             if ok {
+                self.tunnelUp = true
                 self.monitorBusy = false
                 return
             }
+            self.tunnelUp = false
             self.log.log("Автовосстановление: обрыв туннеля, перезапуск")
             TunnelManager.stop(localPort: s.localPort) {
                 TunnelManager.start(settings: s) { started, output in
@@ -345,6 +358,7 @@ final class AppState: ObservableObject {
                             return
                         }
                         if ok2 {
+                            self.tunnelUp = true
                             self.log.log("Автовосстановление: туннель восстановлен")
                             self.monitorBusy = false
                         } else {
@@ -362,8 +376,79 @@ final class AppState: ObservableObject {
         monitorBusy = false
     }
 
+    func opencodeTelegramTapped() {
+        guard !otBusy else {
+            log.log("Opencode Telegram: действие уже выполняется, нажатие проигнорировано")
+            return
+        }
+        otBusy = true
+        if otRunning {
+            log.log("Opencode Telegram: остановка")
+            OpencodeTelegramManager.shared.stop(log: { [weak self] line in
+                self?.log.log(line)
+            }) { [weak self] in
+                guard let self else { return }
+                self.otRunning = false
+                self.otBusy = false
+                self.log.log("Opencode Telegram: остановлен")
+            }
+        } else {
+            ensureTunnelForOpencodeTelegram()
+        }
+    }
+
+    private func ensureTunnelForOpencodeTelegram() {
+        let s = settings
+        log.log("Opencode Telegram: проверка туннеля")
+        TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
+            guard let self else { return }
+            if ok {
+                self.tunnelUp = true
+                self.startOtServices()
+                return
+            }
+            self.log.log("Туннель не работает, запуск: ssh -D \(s.localPort) -p \(s.sshPort) \(s.server)")
+            TunnelManager.start(settings: s) { started, output in
+                guard started else {
+                    self.log.log("ОШИБКА: запуск туннеля не удался\(output.isEmpty ? "" : ": \(output)"), Opencode Telegram не запущен")
+                    self.otBusy = false
+                    return
+                }
+                TunnelManager.check(localPort: s.localPort) { working, _ in
+                    self.tunnelUp = working
+                    guard working else {
+                        self.log.log("ОШИБКА: туннель не работает после запуска, Opencode Telegram не запущен")
+                        self.otBusy = false
+                        return
+                    }
+                    self.log.log("Туннель запущен")
+                    self.ensureMonitor()
+                    self.startOtServices()
+                }
+            }
+        }
+    }
+
+    private func startOtServices() {
+        OpencodeTelegramManager.shared.start(log: { [weak self] line in
+            self?.log.log(line)
+        }) { [weak self] ok in
+            guard let self else { return }
+            self.otRunning = ok
+            self.otBusy = false
+            self.log.log(ok ? "Opencode Telegram: работает" : "ОШИБКА: Opencode Telegram не запущен")
+        }
+    }
+
+    func refreshOtStatus() {
+        OpencodeTelegramManager.shared.probeAsync { [weak self] status in
+            self?.otRunning = status.running
+        }
+    }
+
     func shutdown() {
         monitorTimer?.invalidate()
+        OpencodeTelegramManager.shared.shutdownSync()
         let port = settings.localPort
         if TunnelManager.isTunnelProcessRunning(localPort: port) {
             TunnelManager.stopSync(localPort: port)
