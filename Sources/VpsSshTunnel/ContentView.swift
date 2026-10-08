@@ -102,8 +102,7 @@ struct ContentView: View {
             sectionHeader(icon: "network", title: "Подключение")
 
             HStack(spacing: 10) {
-                labeledField(title: "Сервер (user@host или алиас)", prompt: "root@1.1.1.1",
-                             text: $state.server, field: .server)
+                serverField
                 labeledField(title: "Локальный порт", prompt: "1080",
                              text: $state.localPort, field: .localPort)
                     .frame(width: 110)
@@ -113,24 +112,18 @@ struct ContentView: View {
             }
 
             HStack(spacing: 10) {
-                Button { state.startTapped() } label: {
-                    HStack(spacing: 6) {
-                        Label("Старт", systemImage: "play.fill")
-                        Text("⌘T").opacity(0.7)
-                    }
+                controlButton(title: "Старт", hint: "⌘T", icon: "play.fill", prominent: true) {
+                    state.startTapped()
                 }
-                .buttonStyle(.borderedProminent)
                 .keyboardShortcut("t", modifiers: .command)
 
-                Button { state.checkTapped() } label: {
-                    Label("Проверка", systemImage: "checkmark.circle")
+                controlButton(title: "Проверка", icon: "checkmark.circle") {
+                    state.checkTapped()
                 }
-                .buttonStyle(.bordered)
 
-                Button { state.stopTapped() } label: {
-                    Label("Стоп", systemImage: "stop.fill")
+                controlButton(title: "Стоп", icon: "stop.fill") {
+                    state.stopTapped()
                 }
-                .buttonStyle(.bordered)
 
                 Spacer()
             }
@@ -146,6 +139,15 @@ struct ContentView: View {
             sectionHeader(icon: "bolt.fill", title: "Сервисы")
 
             serviceButton(
+                title: "Telegram",
+                hint: "⌘G",
+                icon: { AnyView(Image(systemName: "paperplane.fill").foregroundStyle(.tint)) },
+                action: { state.telegramTapped() }
+            )
+            .keyboardShortcut("g", modifiers: .command)
+            .disabled(state.actionBusy)
+
+            serviceButton(
                 title: "Chrome",
                 hint: "⌘B",
                 icon: { AnyView(Image(systemName: "globe").foregroundStyle(.tint)) },
@@ -155,12 +157,12 @@ struct ContentView: View {
             .disabled(state.actionBusy)
 
             serviceButton(
-                title: "Telegram",
-                hint: "⌘G",
-                icon: { AnyView(Image(systemName: "paperplane.fill").foregroundStyle(.tint)) },
-                action: { state.telegramTapped() }
+                title: "Yandex",
+                hint: "⌘Y",
+                icon: { AnyView(Image(systemName: "safari.fill").foregroundStyle(.tint)) },
+                action: { state.yandexTapped() }
             )
-            .keyboardShortcut("g", modifiers: .command)
+            .keyboardShortcut("y", modifiers: .command)
             .disabled(state.actionBusy)
 
             serviceButton(
@@ -212,8 +214,83 @@ struct ContentView: View {
                     proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }
-            .frame(minHeight: 160)
+            .frame(minHeight: 240)
         }
+    }
+
+    private var serverField: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Сервер (user@host или алиас)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                TextField("root@1.1.1.1", text: $state.server)
+                    .textFieldStyle(.plain)
+                if !state.sshHosts.isEmpty {
+                    Menu {
+                        ForEach(state.sshHosts) { host in
+                            Button {
+                                state.server = host.alias
+                            } label: {
+                                Text("\(host.alias) — \(host.ip)")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 16, height: 16)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(nsColor: .textBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(focusedField == .server ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.12))
+            )
+            .focused($focusedField, equals: .server)
+        }
+    }
+
+    private func controlButton(title: String, hint: String? = nil, icon: String,
+                               prominent: Bool = false,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .foregroundStyle(prominent ? Color.accentColor : Color.secondary)
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                if let hint {
+                    Text(hint)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(width: 132)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(prominent ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(prominent ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.1))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
     }
 
     private func serviceButton(title: String, hint: String,

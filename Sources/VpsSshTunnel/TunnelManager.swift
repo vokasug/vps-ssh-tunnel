@@ -83,6 +83,10 @@ enum TunnelManager {
         isAppRunning(bundleId: "com.google.Chrome")
     }
 
+    static func isYandexRunning() -> Bool {
+        isAppRunning(bundleId: "ru.yandex.desktop.yandex-browser")
+    }
+
     static func quitApp(processName: String, bundleId: String, completion: @escaping () -> Void) {
         runAsync("/usr/bin/pkill", ["-x", processName]) { _, _ in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -100,6 +104,10 @@ enum TunnelManager {
         quitApp(processName: "Google Chrome", bundleId: "com.google.Chrome", completion: completion)
     }
 
+    static func quitYandex(completion: @escaping () -> Void) {
+        quitApp(processName: "Yandex", bundleId: "ru.yandex.desktop.yandex-browser", completion: completion)
+    }
+
     static func openTelegram() {
         let path = FileManager.default.fileExists(atPath: "/Applications/Telegram.app")
             ? "/Applications/Telegram.app"
@@ -110,6 +118,13 @@ enum TunnelManager {
     static func openChrome(localPort: Int) {
         runAsync("/usr/bin/open", [
             "-a", "Google Chrome",
+            "--args", "--proxy-server=socks5://127.0.0.1:\(localPort)"
+        ]) { _, _ in }
+    }
+
+    static func openYandex(localPort: Int) {
+        runAsync("/usr/bin/open", [
+            "-a", "Yandex",
             "--args", "--proxy-server=socks5://127.0.0.1:\(localPort)"
         ]) { _, _ in }
     }

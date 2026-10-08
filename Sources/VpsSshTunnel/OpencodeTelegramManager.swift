@@ -214,26 +214,9 @@ final class OpencodeTelegramManager {
         let pipe = Pipe()
         p.standardOutput = pipe
         p.standardError = pipe
-        var buffer = [UInt8]()
         pipe.fileHandleForReading.readabilityHandler = { fh in
-            let data = fh.availableData
-            guard !data.isEmpty else {
+            if fh.availableData.isEmpty {
                 fh.readabilityHandler = nil
-                var rest = buffer
-                if rest.last == 0x0D { rest.removeLast() }
-                if !rest.isEmpty {
-                    log("  [\(name)] \(String(decoding: rest, as: UTF8.self))")
-                }
-                return
-            }
-            buffer += data
-            while let nl = buffer.firstIndex(of: 0x0A) {
-                var end = nl
-                if end > 0, buffer[end - 1] == 0x0D { end -= 1 }
-                if end > 0 {
-                    log("  [\(name)] \(String(decoding: buffer[0..<end], as: UTF8.self))")
-                }
-                buffer.removeFirst(nl + 1)
             }
         }
         p.terminationHandler = { [weak self] proc in

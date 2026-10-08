@@ -20,6 +20,7 @@ final class AppState: ObservableObject {
     @Published private(set) var otBusy = false
 
     let log = LogStore()
+    let sshHosts: [SshHost] = SshHost.loadFromSshConfig()
     private let store = SettingsStore()
     private var loading = true
     private var lastSaved: Settings?
@@ -274,6 +275,60 @@ final class AppState: ObservableObject {
         }
     }
 
+    func yandexTapped() {
+        guard !actionBusy else {
+            log.log("Другое действие ещё выполняется, запуск Yandex проигнорирован")
+            return
+        }
+        actionBusy = true
+        if TunnelManager.isYandexRunning() {
+            log.log("Yandex уже запущен, запрос подтверждения")
+            let alert = NSAlert()
+            alert.messageText = "Yandex уже запущен"
+            alert.informativeText = "Закрыть текущий Yandex и запустить заново через туннель?"
+            alert.addButton(withTitle: "Да")
+            alert.addButton(withTitle: "Нет")
+            guard alert.runModal() == .alertFirstButtonReturn else {
+                log.log("Запуск Yandex отменён пользователем")
+                actionBusy = false
+                return
+            }
+            log.log("Закрытие Yandex")
+            TunnelManager.quitYandex { [weak self] in
+                self?.launchYandex()
+            }
+        } else {
+            launchYandex()
+        }
+    }
+
+    private func launchYandex() {
+        let s = settings
+        log.log("Проверка туннеля перед запуском Yandex")
+        TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
+            guard let self else { return }
+            if ok {
+                self.log.log("Запуск Yandex через socks5://127.0.0.1:\(s.localPort)")
+                TunnelManager.openYandex(localPort: s.localPort)
+                self.ensureMonitor()
+                self.actionBusy = false
+                return
+            }
+            self.log.log("Туннель не работает, запуск: ssh -D \(s.localPort) -p \(s.sshPort) \(s.server)")
+            TunnelManager.start(settings: s) { started, output in
+                if started {
+                    self.log.log("Туннель запущен")
+                    self.log.log("Запуск Yandex через socks5://127.0.0.1:\(s.localPort)")
+                    TunnelManager.openYandex(localPort: s.localPort)
+                    self.ensureMonitor()
+                } else {
+                    self.log.log("ОШИБКА: запуск туннеля не удался\(output.isEmpty ? "" : ": \(output)"), Yandex не запущен")
+                }
+                self.actionBusy = false
+            }
+        }
+    }
+
     private func launchChrome() {
         let s = settings
         log.log("Проверка туннеля перед запуском Chrome")
@@ -453,5 +508,43 @@ final class AppState: ObservableObject {
         if TunnelManager.isTunnelProcessRunning(localPort: port) {
             TunnelManager.stopSync(localPort: port)
         }
+    }
+}
+
+struct SshHost: Identifiable, Hashable {
+    let alias: String
+    let ip: String
+    var id: String { alias }
+
+    static func loadFromSshConfig() -> [SshHost] {
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".ssh/config")
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        var hosts: [SshHost] = []
+        var aliases: [String] = []
+        var hostName: String?
+        func flush() {
+            defer { aliases = []; hostName = nil }
+            guard let ip = hostName else { return }
+            for alias in aliases {
+                hosts.append(SshHost(alias: alias, ip: ip))
+            }
+        }
+        for rawLine in content.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty, !line.hasPrefix("#") else { continue }
+            let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "=" })
+            guard let key = parts.first?.lowercased() else { continue }
+            if key == "host" {
+                flush()
+                aliases = parts.dropFirst().map(String.init).filter {
+                    !$0.contains("*") && !$0.contains("?") && !$0.hasPrefix("!")
+                }
+            } else if key == "hostname", parts.count > 1 {
+                hostName = String(parts[1])
+            }
+        }
+        flush()
+        return hosts.sorted { $0.alias.localizedCaseInsensitiveCompare($1.alias) == .orderedAscending }
     }
 }
