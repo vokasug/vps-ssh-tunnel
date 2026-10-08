@@ -16,6 +16,7 @@ struct VpsSshTunnelApp: App {
         WindowGroup("VPS SSH Tunnel") {
             ContentView(state: state)
         }
+        .defaultSize(width: 860, height: 650)
         .windowResizability(.contentMinSize)
     }
 }
