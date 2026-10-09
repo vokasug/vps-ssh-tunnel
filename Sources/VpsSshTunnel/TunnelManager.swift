@@ -38,7 +38,7 @@ enum TunnelManager {
 
     static func check(localPort: Int, completion: @escaping (Bool, String) -> Void) {
         runAsync("/usr/bin/curl", [
-            "--socks5-hostname", "127.0.0.1:\(localPort)",
+            "-4", "--socks5", "127.0.0.1:\(localPort)",
             "-sS", "-o", "/dev/null", "-w", "%{http_code}",
             "--max-time", "10", "https://api.telegram.org"
         ]) { status, output in
