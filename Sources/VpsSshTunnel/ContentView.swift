@@ -157,6 +157,15 @@ struct ContentView: View {
             .disabled(state.actionBusy)
 
             serviceButton(
+                title: "Brave",
+                hint: "⌘R",
+                icon: { AnyView(Image(systemName: "shield.lefthalf.filled").foregroundStyle(.tint)) },
+                action: { state.braveTapped() }
+            )
+            .keyboardShortcut("r", modifiers: .command)
+            .disabled(state.actionBusy)
+
+            serviceButton(
                 title: "Yandex",
                 hint: "⌘Y",
                 icon: { AnyView(Image(systemName: "safari.fill").foregroundStyle(.tint)) },

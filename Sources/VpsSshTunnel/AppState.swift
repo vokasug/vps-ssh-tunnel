@@ -69,7 +69,7 @@ final class AppState: ObservableObject {
             TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
                 guard let self else { return }
                 self.tunnelUp = ok
-                self.log.log(ok ? "OK: tunnel is working" : "FAIL: tunnel is down")
+                self.log.log(ok ? "Туннель работает" : "Туннель не работает")
                 if ok {
                     self.ensureMonitor()
                 } else {
@@ -150,7 +150,7 @@ final class AppState: ObservableObject {
                 self.log.log("Команда запуска выполнена, проверка туннеля")
                 TunnelManager.check(localPort: s.localPort) { working, _ in
                     self.tunnelUp = working
-                    self.log.log(working ? "OK: tunnel is working" : "FAIL: tunnel is down")
+                    self.log.log(working ? "Туннель работает" : "Туннель не работает")
                     if working {
                         self.ensureMonitor()
                     }
@@ -164,7 +164,7 @@ final class AppState: ObservableObject {
         log.log("Проверка туннеля")
         TunnelManager.check(localPort: settings.localPort) { [weak self] ok, _ in
             self?.tunnelUp = ok
-            self?.log.log(ok ? "OK: tunnel is working" : "FAIL: tunnel is down")
+            self?.log.log(ok ? "Туннель работает" : "Туннель не работает")
         }
     }
 
@@ -323,6 +323,60 @@ final class AppState: ObservableObject {
                     self.ensureMonitor()
                 } else {
                     self.log.log("ОШИБКА: запуск туннеля не удался\(output.isEmpty ? "" : ": \(output)"), Yandex не запущен")
+                }
+                self.actionBusy = false
+            }
+        }
+    }
+
+    func braveTapped() {
+        guard !actionBusy else {
+            log.log("Другое действие ещё выполняется, запуск Brave проигнорирован")
+            return
+        }
+        actionBusy = true
+        if TunnelManager.isBraveRunning() {
+            log.log("Brave уже запущен, запрос подтверждения")
+            let alert = NSAlert()
+            alert.messageText = "Brave уже запущен"
+            alert.informativeText = "Закрыть текущий Brave и запустить заново через туннель?"
+            alert.addButton(withTitle: "Да")
+            alert.addButton(withTitle: "Нет")
+            guard alert.runModal() == .alertFirstButtonReturn else {
+                log.log("Запуск Brave отменён пользователем")
+                actionBusy = false
+                return
+            }
+            log.log("Закрытие Brave")
+            TunnelManager.quitBrave { [weak self] in
+                self?.launchBrave()
+            }
+        } else {
+            launchBrave()
+        }
+    }
+
+    private func launchBrave() {
+        let s = settings
+        log.log("Проверка туннеля перед запуском Brave")
+        TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
+            guard let self else { return }
+            if ok {
+                self.log.log("Запуск Brave через socks5://127.0.0.1:\(s.localPort)")
+                TunnelManager.openBrave(localPort: s.localPort)
+                self.ensureMonitor()
+                self.actionBusy = false
+                return
+            }
+            self.log.log("Туннель не работает, запуск: ssh -D \(s.localPort) -p \(s.sshPort) \(s.server)")
+            TunnelManager.start(settings: s) { started, output in
+                if started {
+                    self.log.log("Туннель запущен")
+                    self.log.log("Запуск Brave через socks5://127.0.0.1:\(s.localPort)")
+                    TunnelManager.openBrave(localPort: s.localPort)
+                    self.ensureMonitor()
+                } else {
+                    self.log.log("ОШИБКА: запуск туннеля не удался\(output.isEmpty ? "" : ": \(output)"), Brave не запущен")
                 }
                 self.actionBusy = false
             }

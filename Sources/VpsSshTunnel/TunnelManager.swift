@@ -87,6 +87,10 @@ enum TunnelManager {
         isAppRunning(bundleId: "ru.yandex.desktop.yandex-browser")
     }
 
+    static func isBraveRunning() -> Bool {
+        isAppRunning(bundleId: "com.brave.Browser")
+    }
+
     static func quitApp(processName: String, bundleId: String, completion: @escaping () -> Void) {
         runAsync("/usr/bin/pkill", ["-x", processName]) { _, _ in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -108,6 +112,10 @@ enum TunnelManager {
         quitApp(processName: "Yandex", bundleId: "ru.yandex.desktop.yandex-browser", completion: completion)
     }
 
+    static func quitBrave(completion: @escaping () -> Void) {
+        quitApp(processName: "Brave Browser", bundleId: "com.brave.Browser", completion: completion)
+    }
+
     static func openTelegram() {
         let path = FileManager.default.fileExists(atPath: "/Applications/Telegram.app")
             ? "/Applications/Telegram.app"
@@ -125,6 +133,13 @@ enum TunnelManager {
     static func openYandex(localPort: Int) {
         runAsync("/usr/bin/open", [
             "-a", "Yandex",
+            "--args", "--proxy-server=socks5://127.0.0.1:\(localPort)"
+        ]) { _, _ in }
+    }
+
+    static func openBrave(localPort: Int) {
+        runAsync("/usr/bin/open", [
+            "-a", "Brave Browser",
             "--args", "--proxy-server=socks5://127.0.0.1:\(localPort)"
         ]) { _, _ in }
     }

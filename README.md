@@ -13,6 +13,7 @@
 - **Стоп** — останавливает туннель, если он запущен.
 - **Telegram (⌘G)** — если Telegram уже запущен, предлагает закрыть его; затем проверяет/поднимает туннель и запускает `/Applications/Telegram.app` (прокси в Telegram настраивается один раз: SOCKS5, `127.0.0.1`, ваш порт).
 - **Chrome (⌘B)** — если Chrome уже запущен, предлагает закрыть его; затем проверяет/поднимает туннель и запускает Chrome с `--proxy-server="socks5://127.0.0.1:<порт>"`.
+- **Brave (⌘R)** — то же, что Chrome, но для Brave (`/Applications/Brave Browser.app`), запуск с тем же флагом `--proxy-server`.
 - **Yandex (⌘Y)** — то же, что Chrome, но для Яндекс Браузера (`/Applications/Yandex.app`), запуск с тем же флагом `--proxy-server`.
 - **Opencode Telegram (⌘O)** — стартует/останавливает связку `opencode serve` + `opencode-telegram` бота (точка входа в Telegram для opencode). Перед запуском проверяет/поднимает туннель. Индикатор на кнопке: зелёный — работает, серый — остановлен. В журнал пишутся только события приложения («запущен»/«остановлен»/ошибки), сырой вывод процессов в лог не попадает.
 - **Восстанавливать при обрыве** — каждые 10 секунд проверяет туннель; при обрыве перезапускает. Если перезапуск не удался (нет сети, VPS недоступен), попытка повторяется при каждой следующей проверке, пока туннель не поднимется или галка не будет снята вручную. При выключении экрана мониторинг приостанавливается (с записью в лог), при включении — возобновляется с мгновенной проверкой туннеля (через `NSWorkspace.screensDidSleep/DidWakeNotification`).
@@ -34,7 +35,7 @@
   ssh-copy-id user@your-server
   ssh -o BatchMode=yes user@your-server true   # должно завершиться молча
   ```
-- Для кнопок Telegram/Chrome/Yandex — установленные приложения.
+- Для кнопок Telegram/Chrome/Brave/Yandex — установленные приложения.
 - Для кнопки Opencode Telegram — установленные `opencode` и `opencode-telegram` (пути к бинарям заданы в `OpencodeTelegramManager.swift`).
 
 ## Установка
@@ -79,8 +80,8 @@ open "dist/VPS SSH Tunnel.app"
 
 - `Package.swift` — единственный executable target `VpsSshTunnel`.
 - `Sources/VpsSshTunnel/VpsSshTunnelApp.swift` — `@main`, WindowGroup (размер окна по умолчанию 860×650, минимум 740×560), AppDelegate (завершает приложение при закрытии последнего окна).
-- `Sources/VpsSshTunnel/ContentView.swift` — UI: поле сервера с выпадающим списком хостов из `~/.ssh/config`, поля портов, кнопки управления туннелем (равной ширины, в стиле кнопок сервисов), кнопки сервисов (Telegram, Chrome, Yandex, Opencode Telegram), галка автовосстановления, лог. Наблюдает `AppState` и `LogStore`.
-- `Sources/VpsSshTunnel/AppState.swift` — вся логика действий (Старт/Проверка/Стоп/Telegram/Chrome/Yandex/Opencode Telegram), монитор автовосстановления, пауза мониторинга при сне экрана, сохранение настроек, хук завершения; парсер `SshHost` для `~/.ssh/config`.
+- `Sources/VpsSshTunnel/ContentView.swift` — UI: поле сервера с выпадающим списком хостов из `~/.ssh/config`, поля портов, кнопки управления туннелем (равной ширины, в стиле кнопок сервисов), кнопки сервисов (Telegram, Chrome, Brave, Yandex, Opencode Telegram), галка автовосстановления, лог. Наблюдает `AppState` и `LogStore`.
+- `Sources/VpsSshTunnel/AppState.swift` — вся логика действий (Старт/Проверка/Стоп/Telegram/Chrome/Brave/Yandex/Opencode Telegram), монитор автовосстановления, пауза мониторинга при сне экрана, сохранение настроек, хук завершения; парсер `SshHost` для `~/.ssh/config`.
 - `Sources/VpsSshTunnel/TunnelManager.swift` — обёртки `Process` для ssh/curl/pkill/open, проверки запущенности приложений.
 - `Sources/VpsSshTunnel/OpencodeTelegramManager.swift` — оркестрация `opencode serve` + `opencode-telegram` бота: запуск с ожиданием готовности (порт 4096, маркер `started!` в логе бота), остановка, синхронный shutdown при выходе. Вывод процессов из pipe читается (чтобы не заблокировался буфер), но в журнал не пишется.
 - `Sources/VpsSshTunnel/SettingsStore.swift` — JSON-конфиг `~/.config/vps-ssh-tunnel/.vps-ssh-tunnel`, создаётся с дефолтами автоматически.
