@@ -249,29 +249,9 @@ final class AppState: ObservableObject {
     }
 
     private func launchTelegram() {
-        let s = settings
-        log.log("Проверка туннеля перед запуском Telegram")
-        TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
-            guard let self else { return }
-            if ok {
-                self.log.log("Запуск Telegram")
-                TunnelManager.openTelegram()
-                self.ensureMonitor()
-                self.actionBusy = false
-                return
-            }
-            self.log.log("Туннель не работает, запуск: ssh -D \(s.localPort) -p \(s.sshPort) \(s.server)")
-            TunnelManager.start(settings: s) { started, output in
-                if started {
-                    self.log.log("Туннель запущен")
-                    self.log.log("Запуск Telegram")
-                    TunnelManager.openTelegram()
-                    self.ensureMonitor()
-                } else {
-                    self.log.log("ОШИБКА: запуск туннеля не удался\(output.isEmpty ? "" : ": \(output)"), Telegram не запущен")
-                }
-                self.actionBusy = false
-            }
+        launchWithTunnel(appName: "Telegram") { _ in
+            self.log.log("Запуск Telegram")
+            TunnelManager.openTelegram()
         }
     }
 
@@ -303,29 +283,9 @@ final class AppState: ObservableObject {
     }
 
     private func launchYandex() {
-        let s = settings
-        log.log("Проверка туннеля перед запуском Yandex")
-        TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
-            guard let self else { return }
-            if ok {
-                self.log.log("Запуск Yandex через socks5://127.0.0.1:\(s.localPort)")
-                TunnelManager.openYandex(localPort: s.localPort)
-                self.ensureMonitor()
-                self.actionBusy = false
-                return
-            }
-            self.log.log("Туннель не работает, запуск: ssh -D \(s.localPort) -p \(s.sshPort) \(s.server)")
-            TunnelManager.start(settings: s) { started, output in
-                if started {
-                    self.log.log("Туннель запущен")
-                    self.log.log("Запуск Yandex через socks5://127.0.0.1:\(s.localPort)")
-                    TunnelManager.openYandex(localPort: s.localPort)
-                    self.ensureMonitor()
-                } else {
-                    self.log.log("ОШИБКА: запуск туннеля не удался\(output.isEmpty ? "" : ": \(output)"), Yandex не запущен")
-                }
-                self.actionBusy = false
-            }
+        launchWithTunnel(appName: "Yandex") { s in
+            self.log.log("Запуск Yandex через socks5://127.0.0.1:\(s.localPort)")
+            TunnelManager.openYandex(localPort: s.localPort)
         }
     }
 
@@ -357,55 +317,51 @@ final class AppState: ObservableObject {
     }
 
     private func launchBrave() {
-        let s = settings
-        log.log("Проверка туннеля перед запуском Brave")
-        TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
-            guard let self else { return }
-            if ok {
-                self.log.log("Запуск Brave через socks5://127.0.0.1:\(s.localPort)")
-                TunnelManager.openBrave(localPort: s.localPort)
-                self.ensureMonitor()
-                self.actionBusy = false
-                return
-            }
-            self.log.log("Туннель не работает, запуск: ssh -D \(s.localPort) -p \(s.sshPort) \(s.server)")
-            TunnelManager.start(settings: s) { started, output in
-                if started {
-                    self.log.log("Туннель запущен")
-                    self.log.log("Запуск Brave через socks5://127.0.0.1:\(s.localPort)")
-                    TunnelManager.openBrave(localPort: s.localPort)
-                    self.ensureMonitor()
-                } else {
-                    self.log.log("ОШИБКА: запуск туннеля не удался\(output.isEmpty ? "" : ": \(output)"), Brave не запущен")
-                }
-                self.actionBusy = false
-            }
+        launchWithTunnel(appName: "Brave") { s in
+            self.log.log("Запуск Brave через socks5://127.0.0.1:\(s.localPort)")
+            TunnelManager.openBrave(localPort: s.localPort)
         }
     }
 
     private func launchChrome() {
+        launchWithTunnel(appName: "Chrome") { s in
+            self.log.log("Запуск Chrome через socks5://127.0.0.1:\(s.localPort)")
+            TunnelManager.openChrome(localPort: s.localPort)
+        }
+    }
+
+    private func launchWithTunnel(appName: String, launch: @escaping (Settings) -> Void) {
         let s = settings
-        log.log("Проверка туннеля перед запуском Chrome")
+        log.log("Проверка туннеля перед запуском \(appName)")
         TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
             guard let self else { return }
+            self.tunnelUp = ok
             if ok {
-                self.log.log("Запуск Chrome через socks5://127.0.0.1:\(s.localPort)")
-                TunnelManager.openChrome(localPort: s.localPort)
+                launch(s)
                 self.ensureMonitor()
                 self.actionBusy = false
                 return
             }
             self.log.log("Туннель не работает, запуск: ssh -D \(s.localPort) -p \(s.sshPort) \(s.server)")
             TunnelManager.start(settings: s) { started, output in
-                if started {
-                    self.log.log("Туннель запущен")
-                    self.log.log("Запуск Chrome через socks5://127.0.0.1:\(s.localPort)")
-                    TunnelManager.openChrome(localPort: s.localPort)
-                    self.ensureMonitor()
-                } else {
-                    self.log.log("ОШИБКА: запуск туннеля не удался\(output.isEmpty ? "" : ": \(output)"), Chrome не запущен")
+                guard started else {
+                    self.log.log("ОШИБКА: запуск туннеля не удался\(output.isEmpty ? "" : ": \(output)"), \(appName) не запущен")
+                    self.actionBusy = false
+                    return
                 }
-                self.actionBusy = false
+                self.log.log("Команда запуска выполнена, проверка туннеля")
+                TunnelManager.check(localPort: s.localPort) { working, _ in
+                    self.tunnelUp = working
+                    guard working else {
+                        self.log.log("ОШИБКА: туннель не работает после запуска, \(appName) не запущен")
+                        self.actionBusy = false
+                        return
+                    }
+                    self.log.log("Туннель запущен")
+                    launch(s)
+                    self.ensureMonitor()
+                    self.actionBusy = false
+                }
             }
         }
     }
