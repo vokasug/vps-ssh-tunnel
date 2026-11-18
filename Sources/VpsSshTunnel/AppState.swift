@@ -26,6 +26,7 @@ final class AppState: ObservableObject {
     private var lastSaved: Settings?
     private var monitorTimer: Timer?
     private var monitorBusy = false
+    private var monitorPolicy = MonitorPolicy()
     private var monitorSuspendedByScreenSleep = false
 
     var settings: Settings {
@@ -66,10 +67,10 @@ final class AppState: ObservableObject {
         }
         if s.autoRestart {
             log.log("Проверка туннеля при запуске")
-            TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
+            TunnelManager.check(localPort: s.localPort) { [weak self] ok, output in
                 guard let self else { return }
                 self.tunnelUp = ok
-                self.log.log(ok ? "Туннель работает" : "Туннель не работает")
+                self.log.log(ok ? "Туннель работает" : "Туннель не работает\(output.isEmpty ? "" : ": \(output)")")
                 if ok {
                     self.ensureMonitor()
                 } else {
@@ -148,9 +149,9 @@ final class AppState: ObservableObject {
                     return
                 }
                 self.log.log("Команда запуска выполнена, проверка туннеля")
-                TunnelManager.check(localPort: s.localPort) { working, _ in
+                TunnelManager.check(localPort: s.localPort) { working, output in
                     self.tunnelUp = working
-                    self.log.log(working ? "Туннель работает" : "Туннель не работает")
+                    self.log.log(working ? "Туннель работает" : "Туннель не работает\(output.isEmpty ? "" : ": \(output)")")
                     if working {
                         self.ensureMonitor()
                     }
@@ -162,9 +163,9 @@ final class AppState: ObservableObject {
 
     func checkTapped() {
         log.log("Проверка туннеля")
-        TunnelManager.check(localPort: settings.localPort) { [weak self] ok, _ in
+        TunnelManager.check(localPort: settings.localPort) { [weak self] ok, output in
             self?.tunnelUp = ok
-            self?.log.log(ok ? "Туннель работает" : "Туннель не работает")
+            self?.log.log(ok ? "Туннель работает" : "Туннель не работает\(output.isEmpty ? "" : ": \(output)")")
         }
     }
 
@@ -373,6 +374,7 @@ final class AppState: ObservableObject {
     }
 
     private func stopMonitor() {
+        monitorPolicy.reset()
         guard monitorTimer != nil else { return }
         monitorTimer?.invalidate()
         monitorTimer = nil
@@ -383,6 +385,7 @@ final class AppState: ObservableObject {
     private func updateMonitor() {
         monitorTimer?.invalidate()
         monitorTimer = nil
+        monitorPolicy.reset()
         guard autoRestart else { return }
         monitorTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             self?.monitorTick()
@@ -393,15 +396,26 @@ final class AppState: ObservableObject {
         guard !monitorBusy else { return }
         monitorBusy = true
         let s = settings
-        TunnelManager.check(localPort: s.localPort) { [weak self] ok, _ in
+        TunnelManager.check(localPort: s.localPort) { [weak self] ok, output in
             guard let self else { return }
             if ok {
+                _ = self.monitorPolicy.restartNeeded(checkPassed: true, processRunning: true)
                 self.tunnelUp = true
                 self.monitorBusy = false
                 return
             }
             self.tunnelUp = false
-            self.log.log("Автовосстановление: обрыв туннеля, перезапуск")
+            let processRunning = TunnelManager.isTunnelProcessRunning(localPort: s.localPort)
+            let restartNeeded = self.monitorPolicy.restartNeeded(checkPassed: false, processRunning: processRunning)
+            let detail = output.isEmpty ? "" : ": \(output)"
+            guard restartNeeded else {
+                self.log.log("Автовосстановление: проверка не прошла (\(self.monitorPolicy.consecutiveFailures)/3), перезапуск отложен\(detail)")
+                self.monitorBusy = false
+                return
+            }
+            self.log.log(processRunning
+                ? "Автовосстановление: 3 проверки подряд не прошли, перезапуск\(detail)"
+                : "Автовосстановление: SSH-процесс не запущен, перезапуск\(detail)")
             TunnelManager.stop(localPort: s.localPort) {
                 TunnelManager.start(settings: s) { started, output in
                     guard self.autoRestart, self.monitorTimer != nil else {
@@ -415,7 +429,7 @@ final class AppState: ObservableObject {
                         self.failMonitor()
                         return
                     }
-                    TunnelManager.check(localPort: s.localPort) { ok2, _ in
+                    TunnelManager.check(localPort: s.localPort) { ok2, output2 in
                         guard self.monitorTimer != nil else {
                             TunnelManager.stop(localPort: s.localPort) {
                                 self.monitorBusy = false
@@ -426,8 +440,9 @@ final class AppState: ObservableObject {
                             self.tunnelUp = true
                             self.log.log("Автовосстановление: туннель восстановлен")
                             self.monitorBusy = false
+                            self.updateMonitor()
                         } else {
-                            self.log.log("ОШИБКА: автовосстановление: туннель не работает после перезапуска")
+                            self.log.log("ОШИБКА: автовосстановление: туннель не работает после перезапуска\(output2.isEmpty ? "" : ": \(output2)")")
                             self.failMonitor()
                         }
                     }
@@ -439,6 +454,7 @@ final class AppState: ObservableObject {
     private func failMonitor() {
         log.log("Автовосстановление: попытка не удалась, повтор через 10 с")
         monitorBusy = false
+        updateMonitor()
     }
 
     func opencodeTelegramTapped() {

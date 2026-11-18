@@ -42,7 +42,8 @@ enum TunnelManager {
             "-sS", "-o", "/dev/null", "-w", "%{http_code}",
             "--max-time", "10", "https://api.telegram.org"
         ]) { status, output in
-            completion(status == 0 && output == "302", output)
+            let detail = output.components(separatedBy: .newlines).joined(separator: " ")
+            completion(status == 0 && (100...599).contains(Int(output) ?? 0), detail)
         }
     }
 
@@ -55,8 +56,8 @@ enum TunnelManager {
             "-o", "ConnectTimeout=5",
             "-o", "ExitOnForwardFailure=yes",
             "-o", "TCPKeepAlive=no",
-            "-o", "ServerAliveInterval=30",
-            "-o", "ServerAliveCountMax=3",
+            "-o", "ServerAliveInterval=15",
+            "-o", "ServerAliveCountMax=2",
             settings.server
         ]) { status, output in
             completion(status == 0, output)
