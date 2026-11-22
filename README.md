@@ -15,7 +15,7 @@
 - **Chrome (⌘B)** — если Chrome уже запущен, предлагает закрыть его; затем проверяет/поднимает туннель и запускает Chrome с `--proxy-server="socks5://127.0.0.1:<порт>"`.
 - **Brave (⌘R)** — то же, что Chrome, но для Brave (`/Applications/Brave Browser.app`), запуск с тем же флагом `--proxy-server`.
 - **Yandex (⌘Y)** — то же, что Chrome, но для Яндекс Браузера (`/Applications/Yandex.app`), запуск с тем же флагом `--proxy-server`.
-- **Opencode Telegram (⌘O)** — стартует/останавливает связку `opencode serve` + `opencode-telegram` бота (точка входа в Telegram для opencode). Перед запуском проверяет/поднимает туннель. Индикатор на кнопке: зелёный — работает, серый — остановлен. В журнал пишутся только события приложения («запущен»/«остановлен»/ошибки), сырой вывод процессов в лог не попадает.
+- **Opencode Telegram (⌘O)** — стартует/останавливает связку OpenCode V2 service (`opencode serve --service`, порт 49374) + `opencode-telegram` бота (точка входа в Telegram для opencode). Уже работающий общий V2 service используется повторно и при остановке бота не завершается; service, запущенный приложением, останавливается вместе с ним. Перед запуском проверяет/поднимает туннель. Для прохождения Telegram-трафика через туннель в конфигурации бота должен быть задан `TELEGRAM_PROXY_URL=socks5h://127.0.0.1:<порт>`. Индикатор на кнопке: зелёный — работает, серый — остановлен. В журнал пишутся только события приложения («запущен»/«остановлен»/ошибки), сырой вывод процессов в лог не попадает.
 - **Восстанавливать при обрыве** — каждые 10 секунд проверяет туннель. Отсутствующий SSH-процесс перезапускается сразу; если процесс жив, перезапуск происходит только после трёх последовательных неудачных проверок, поэтому один таймаут не разрывает работающий туннель. После восстановления или неудачной попытки следующий цикл начинается через полные 10 секунд. Ошибки проверок и перезапусков пишутся в журнал. При выключении экрана мониторинг приостанавливается (с записью в лог), при включении — возобновляется с мгновенной проверкой туннеля (через `NSWorkspace.screensDidSleep/DidWakeNotification`).
 - **Лог** — все события с таймкодами, текст можно выделять и копировать; кнопка «Копировать весь лог» копирует всё в буфер. Лог также пишется в файл `~/.config/vps-ssh-tunnel/vps-ssh-tunnel.log` (обнуляется при каждом запуске).
 - При закрытии приложения работающий туннель автоматически завершается.
@@ -36,7 +36,7 @@
   ssh -o BatchMode=yes user@your-server true   # должно завершиться молча
   ```
 - Для кнопок Telegram/Chrome/Brave/Yandex — установленные приложения.
-- Для кнопки Opencode Telegram — установленные `opencode` и `opencode-telegram` (пути к бинарям заданы в `OpencodeTelegramManager.swift`).
+- Для кнопки Opencode Telegram — установленные OpenCode V2 CLI (`~/.opencode/bin/opencode`) и `opencode-telegram` с поддержкой V2 (`/opt/homebrew/bin/opencode-telegram`). Бот настраивается командой `opencode-telegram config`: версия V2, service API `http://127.0.0.1:49374` и пароль из `opencode service get password`.
 
 ## Установка
 
@@ -111,7 +111,7 @@ tc qdisc show dev eth0
 - `Sources/VpsSshTunnel/AppState.swift` — вся логика действий (Старт/Проверка/Стоп/Telegram/Chrome/Brave/Yandex/Opencode Telegram), монитор автовосстановления, пауза мониторинга при сне экрана, сохранение настроек, хук завершения; парсер `SshHost` для `~/.ssh/config`.
 - `Sources/VpsSshTunnel/MonitorPolicy.swift` — счётчик последовательных неудачных проверок и решение о перезапуске.
 - `Sources/VpsSshTunnel/TunnelManager.swift` — обёртки `Process` для ssh/curl/pkill/open, проверки запущенности приложений.
-- `Sources/VpsSshTunnel/OpencodeTelegramManager.swift` — оркестрация `opencode serve` + `opencode-telegram` бота: запуск с ожиданием готовности (порт 4096, маркер `started!` в логе бота), остановка, синхронный shutdown при выходе. Вывод процессов из pipe читается (чтобы не заблокировался буфер), но в журнал не пишется.
+- `Sources/VpsSshTunnel/OpencodeTelegramManager.swift` — оркестрация OpenCode V2 service + `opencode-telegram` бота: запуск с ожиданием готовности (порт 49374, маркер `started!` в логе бота), остановка без завершения внешнего общего service, синхронный shutdown принадлежащих приложению процессов при выходе. Вывод процессов из pipe читается (чтобы не заблокировался буфер), но в журнал не пишется.
 - `Sources/VpsSshTunnel/SettingsStore.swift` — JSON-конфиг `~/.config/vps-ssh-tunnel/.vps-ssh-tunnel`, создаётся с дефолтами автоматически.
 - `Sources/VpsSshTunnel/LogStore.swift` — лог в памяти + зеркало в файл `~/.config/vps-ssh-tunnel/vps-ssh-tunnel.log` (обнуляется при запуске).
 

@@ -3,12 +3,11 @@ import Foundation
 final class OpencodeTelegramManager {
     static let shared = OpencodeTelegramManager()
 
-    private let opencodePath = "/Users/alexander/.opencode/bin/opencode"
+    private let opencodePath = NSHomeDirectory() + "/.opencode/bin/opencode"
     private let botPath = "/opt/homebrew/bin/opencode-telegram"
     private let botLogDir = "Library/Application Support/opencode-telegram-bot/logs"
-    private let servePort = 4096
-    private let serveKillPattern = "bin/opencode serve"
-    private let pathEnv = "/Users/alexander/.opencode/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    private let servePort = 49374
+    private let pathEnv = NSHomeDirectory() + "/.opencode/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
     private let queue = DispatchQueue(label: "opencode-telegram.orchestration")
     private var owned: [String: Process] = [:]
@@ -33,10 +32,10 @@ final class OpencodeTelegramManager {
             }
 
             if self.portOpen(self.servePort) {
-                log("opencode serve уже работает (порт \(self.servePort))")
+                log("OpenCode V2 service уже работает (порт \(self.servePort))")
             } else {
-                log("Запуск: opencode serve")
-                guard let serve = self.spawnLongRunning(self.opencodePath, ["serve"], name: "serve", log: log) else {
+                log("Запуск: opencode serve --service")
+                guard let serve = self.spawnLongRunning(self.opencodePath, ["serve", "--service"], name: "serve", log: log) else {
                     finish(false)
                     return
                 }
@@ -46,13 +45,13 @@ final class OpencodeTelegramManager {
                     usleep(500_000)
                 }
                 guard up else {
-                    log("ОШИБКА: opencode serve не открыл порт \(self.servePort)")
+                    log("ОШИБКА: OpenCode V2 service не открыл порт \(self.servePort)")
                     self.terminateProcess(serve, name: "serve", log: log)
                     finish(false)
                     return
                 }
                 self.owned["serve"] = serve
-                log("opencode serve запущен")
+                log("OpenCode V2 service запущен")
             }
 
             if self.botRunning() {
@@ -97,9 +96,6 @@ final class OpencodeTelegramManager {
             }
             if self.botRunning() {
                 self.killByPattern(self.botPath, name: "bot", log: log)
-            }
-            if self.patternAlive(self.serveKillPattern) {
-                self.killByPattern(self.serveKillPattern, name: "serve", log: log)
             }
             DispatchQueue.main.async { completion() }
         }
